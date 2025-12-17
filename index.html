@@ -1,72 +1,115 @@
-<script>
-let audioContext;
-let analyser;
-let microphone;
-let dataArray;
-let running = false;
-let lastVibration = 0;
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>VibeMusic</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      background: #000;
+      color: #fff;
+      font-family: system-ui, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      text-align: center;
+    }
+    button {
+      font-size: 1.4rem;
+      padding: 1rem 2rem;
+      border-radius: 16px;
+      border: none;
+      margin-top: 2rem;
+    }
+    .on { background: #2ecc71; }
+    .off { background: #e74c3c; }
+  </style>
+</head>
 
-const button = document.getElementById("toggle");
-const status = document.getElementById("status");
+<body>
+  <h1>🎵 VibeMusic</h1>
+  <p>Transforme la musique en vibrations</p>
 
-button.onclick = async () => {
-  if (!running) {
-    await start();
-  } else {
-    stop();
-  }
-};
+  <button id="toggle" class="on">Démarrer</button>
 
-async function start() {
-  audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  <p id="status"></p>
 
-  // IMPORTANT pour iOS
-  await audioContext.resume();
+  <script>
+    let audioContext;
+    let analyser;
+    let microphone;
+    let dataArray;
+    let running = false;
+    let lastVibration = 0;
 
-  analyser = audioContext.createAnalyser();
-  analyser.fftSize = 256;
+    const button = document.getElementById("toggle");
+    const status = document.getElementById("status");
 
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  microphone = audioContext.createMediaStreamSource(stream);
-  microphone.connect(analyser);
+    button.onclick = async () => {
+      if (!running) {
+        await start();
+      } else {
+        stop();
+      }
+    };
 
-  dataArray = new Uint8Array(analyser.frequencyBinCount);
+    async function start() {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      await audioContext.resume(); // indispensable sur iOS
 
-  running = true;
-  button.textContent = "Arrêter";
-  button.className = "off";
-  status.textContent = "Écoute en cours…";
+      analyser = audioContext.createAnalyser();
+      analyser.fftSize = 256;
 
-  loop();
-}
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        microphone = audioContext.createMediaStreamSource(stream);
+        microphone.connect(analyser);
 
-function stop() {
-  running = false;
-  button.textContent = "Démarrer";
-  button.className = "on";
-  status.textContent = "Arrêté";
-}
+        dataArray = new Uint8Array(analyser.frequencyBinCount);
 
-function loop() {
-  if (!running) return;
+        running = true;
+        button.textContent = "Arrêter";
+        button.className = "off";
+        status.textContent = "Écoute en cours…";
 
-  analyser.getByteTimeDomainData(dataArray);
+        loop();
+      } catch (err) {
+        status.textContent = "Erreur micro : " + err.message;
+        console.error(err);
+      }
+    }
 
-  let sum = 0;
-  for (let i = 0; i < dataArray.length; i++) {
-    const v = (dataArray[i] - 128) / 128;
-    sum += v * v;
-  }
+    function stop() {
+      running = false;
+      button.textContent = "Démarrer";
+      button.className = "on";
+      status.textContent = "Arrêté";
+    }
 
-  const rms = Math.sqrt(sum / dataArray.length);
-  const now = Date.now();
+    function loop() {
+      if (!running) return;
 
-  // Seuil plus bas + vibrations plus espacées (clé pour iOS)
-  if (rms > 0.03 && now - lastVibration > 300) {
-    navigator.vibrate([100]);
-    lastVibration = now;
-  }
+      analyser.getByteTimeDomainData(dataArray);
 
-  requestAnimationFrame(loop);
-}
-</script>
+      let sum = 0;
+      for (let i = 0; i < dataArray.length; i++) {
+        const v = (dataArray[i] - 128) / 128;
+        sum += v * v;
+      }
+
+      const rms = Math.sqrt(sum / dataArray.length);
+      const now = Date.now();
+
+      // seuil adapté + vibrations espacées pour iOS
+      if (rms > 0.03 && now - lastVibration > 300) {
+        navigator.vibrate([100]);
+        lastVibration = now;
+      }
+
+      requestAnimationFrame(loop);
+    }
+  </script>
+</body>
+</html>
